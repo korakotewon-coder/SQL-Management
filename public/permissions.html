@@ -193,18 +193,23 @@
           await setCurrentUser(id);
           __createMode = false;
         }
-        loadUsers();
+      };
       function logout(){ localStorage.removeItem('auth_token'); location.href='/login.html'; }
       loadUsers();
-      
 
       // Server Access per User (by Connection)
       let __svRows = [];
       let __connInfo = new Map();
+      let __svAbortCtrl = null;
       async function loadServerAccess(userId){
         if (!userId) { __svRows = []; renderServerAccessBox(userId); return; }
+        const box = document.getElementById('svAccessBox');
+        box.textContent = 'Loading...';
+        // abort previous request if any
+        if (__svAbortCtrl) { try { __svAbortCtrl.abort(); } catch(e){} }
+        __svAbortCtrl = new AbortController();
         // load connection info for display
-        const rc = await fetch('/auth/connections', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        const rc = await fetch('/auth/connections', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') }, signal: __svAbortCtrl.signal });
         const cons = await rc.json();
         if (Array.isArray(cons)) {
           __connInfo = new Map(cons.map(c => [c.name, `${c.host},${c.port} (${c.user})`]));
@@ -212,7 +217,7 @@
           __connInfo = new Map();
         }
         // load access rows
-        const r = await fetch('/auth/connection-access?user_id='+encodeURIComponent(userId), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        const r = await fetch('/auth/connection-access?user_id='+encodeURIComponent(userId), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') }, signal: __svAbortCtrl.signal });
         __svRows = await r.json();
         if (!Array.isArray(__svRows)) __svRows = [];
         renderServerAccessBox(userId);
@@ -245,6 +250,7 @@
       // Database Access per User (by Server)
       let __dbRows = [];
       let __servers = [];
+      let __dbAbortCtrl = null;
       async function loadDbaccServers(){
         const r = await fetch('/api/servers', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
         const list = await r.json();
@@ -276,8 +282,12 @@
         });
       }
       async function loadDbAccess(userId, serverName){
+        const box = document.getElementById('dbAccessBox');
         if (!userId || !serverName) { __dbRows = []; renderDbAccessBox(userId, serverName); return; }
-        const r = await fetch('/auth/database-access?user_id='+encodeURIComponent(userId)+'&server_name='+encodeURIComponent(serverName), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        box.textContent = 'Loading...';
+        if (__dbAbortCtrl) { try { __dbAbortCtrl.abort(); } catch(e){} }
+        __dbAbortCtrl = new AbortController();
+        const r = await fetch('/auth/database-access?user_id='+encodeURIComponent(userId)+'&server_name='+encodeURIComponent(serverName), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') }, signal: __dbAbortCtrl.signal });
         __dbRows = await r.json();
         if (!Array.isArray(__dbRows)) __dbRows = [];
         renderDbAccessBox(userId, serverName);

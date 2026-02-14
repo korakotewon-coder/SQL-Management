@@ -81,5 +81,5 @@ metadata:
   name: mssql-credentials
 type: Opaque
 stringData:
-  DB_USER: ""
-  DB_PASSWORD: ""
+  DB_USER: "uinet"
+  DB_PASSWORD: "p@$$w0rd"
