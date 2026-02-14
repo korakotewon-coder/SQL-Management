@@ -1,0 +1,32 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# Environment & secrets
+.env
+.env.*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs & coverage
+logs/
+*.log
+coverage/
+
+# Build outputs (if any)
+dist/
+build/
+
+# Trae / tooling
+.trae/
+
+# Misc
+*.sql
+*.bak
+*.tmp

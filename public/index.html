@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Thanvasu DB Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --ssms-blue: #0078d4;
+            --ssms-dark: #201f1e;
+            --bg-light: #f3f2f1;
+        }
+        body {
+            background-color: var(--bg-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-bottom: 70px;
+        }
+        .app-header {
+            background-color: var(--ssms-dark);
+            color: white;
+            padding: 12px 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        .server-info {
+            font-size: 0.75rem;
+            color: #a19f9d;
+            display: block;
+        }
+        .selector-container {
+            padding: 12px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+        }
+        .data-card {
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid var(--ssms-blue);
+            margin: 8px 12px;
+            padding: 12px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .data-card.sp-card {
+            border-left-color: #7a00d4;
+        }
+        .data-card:active {
+            background-color: #edebe9;
+        }
+        .search-box {
+            margin: 12px;
+            position: relative;
+        }
+        .search-box input {
+            padding-left: 35px;
+            border-radius: 20px;
+            border: 1px solid #c8c6c4;
+        }
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #605e5c;
+        }
+        .fab {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background-color: var(--ssms-blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border: none;
+            z-index: 999;
+        }
+        .modal-content {
+            border-radius: 8px;
+        }
+        .modal-header {
+            background-color: var(--ssms-blue);
+            color: white;
+        }
+        .modal-header.sp-header {
+            background-color: #7a00d4;
+        }
+        .btn-ssms {
+            background-color: var(--ssms-blue);
+            color: white;
+        }
+        .btn-sp {
+            background-color: #7a00d4;
+            color: white;
+        }
+        .table-responsive {
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            font-size: 0.75rem;
+        }
+        .badge-col {
+            font-size: 0.65rem;
+            font-family: monospace;
+        }
+        .type-pill {
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border: 1px solid var(--ssms-blue);
+            color: var(--ssms-blue);
+            transition: all 0.2s;
+        }
+        .type-pill.active {
+            background-color: var(--ssms-blue);
+            color: white;
+        }
+        /* Responsive header: collapse toolbar into menu on small screens */
+        .menu-dropdown { display: none; }
+        .toolbar-btn { display: inline-flex; }
+        @media (max-width: 576px) {
+            .toolbar-btn { display: none; }
+            .menu-dropdown { display: inline-flex; }
+            .server-info { display: none; }
+        }
+        .sp-result-container {
+            max-height: 400px;
+            overflow: auto;
+            border: 1px solid #ddd;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-header d-flex justify-content-between align-items-center">
+        <div>
+            <div class="fw-bold"><i class="bi bi-database-fill-gear me-2"></i>Thanvasu DB Manager</div>
+            <span class="server-info">tvsdb1.thanvasupos.com:28914</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-secondary toolbar-btn" id="btnApiDocs" href="/api-docs" target="_blank" rel="noopener"><i class="bi bi-journal-code"></i> API Docs</a>
+            <a class="btn btn-sm btn-warning toolbar-btn" id="btnPermissions" href="/permissions.html"><i class="bi bi-shield-lock"></i> Permissions</a>
+            <a class="btn btn-sm btn-info text-white toolbar-btn" id="btnAudit" href="/audit.html"><i class="bi bi-clipboard-data"></i> Audit Log</a>
+            <button class="btn btn-sm btn-light toolbar-btn" onclick="fetchData()"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="btn btn-sm btn-outline-light toolbar-btn" id="btnLogout" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Logout</button>
+            <div class="dropdown menu-dropdown">
+              <button class="btn btn-sm btn-outline-light" id="btnMore" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-three-dots"></i></button>
+              <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" id="menuApi" href="/api-docs" target="_blank" rel="noopener">API Docs</a></li>
+                <li><a class="dropdown-item" id="menuPerm" href="/permissions.html">Permissions</a></li>
+                <li><a class="dropdown-item" id="menuAudit" href="/audit.html">Audit Log</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><button class="dropdown-item" id="menuRefresh">Refresh</button></li>
+                <li><button class="dropdown-item" id="menuLogout">Logout</button></li>
+              </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="selector-container">
+        <div class="row g-2 mb-2">
+            <div class="col-12">
+                <label class="form-label small fw-bold text-muted mb-1">Server:</label>
+                <select id="serverSelector" class="form-select form-select-sm">
+                    <option value="">Loading servers...</option>
+                </select>
+            </div>
+            <div class="col-12 mt-2">
+                <label class="form-label small fw-bold text-muted mb-1">Database:</label>
+                <select id="dbSelector" class="form-select form-select-sm" onchange="onDbChange()">
+                    <option value="">Loading...</option>
+                </select>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mb-2"></div>
+        <div class="row g-2">
+            <div class="col-12">
+                <select id="objectSelector" class="form-select form-select-sm" onchange="fetchData()">
+                    <option value="">Select Database first</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input type="text" id="searchInput" class="form-control" placeholder="Search..." onkeyup="filterData()">
+    </div>
+    <div class="px-3 pb-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-auto">
+                <label class="small text-muted">Rows:</label>
+            </div>
+            <div class="col-6">
+                <select id="rowLimit" class="form-select form-select-sm" onchange="fetchData()">
+                    <option value="100">Top 100</option>
+                    <option value="1000">Top 1000</option>
+                    <option value="all">Select *</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div id="dataContainer">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Please select a database and table</p>
+        </div>
+    </div>
+
+    <button class="fab" id="addButton" onclick="openForm()" style="display: none;"><i class="bi bi-plus-lg"></i></button>
+
+    <div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index: 1080"></div>
+
+    <!-- Dynamic Form Modal -->
+    <div class="modal fade" id="formModal" tabindex="-1">
+        <div class="modal-dialog modal-fullscreen-sm-down">
+            <div class="modal-content">
+                <div class="modal-header" id="modalHeader">
+                    <h5 class="modal-title" id="formTitle">Edit Record</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="dynamicForm">
+                        <div id="formFields"></div>
+                        <div id="spExecutionResults" class="sp-result-container d-none"></div>
+                        <div id="sqlPreviewBox" class="mt-3 d-none">
+                            <label class="form-label fw-bold small mb-2">SQL Preview</label>
+                            <pre id="sqlPreview" class="p-2 bg-light border small" style="white-space: pre-wrap;"></pre>
+                        </div>
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" id="submitBtn" class="btn btn-ssms py-3 fw-bold">SAVE TO DATABASE</button>
+                            <button type="button" id="deleteBtn" class="btn btn-outline-danger py-2">DELETE RECORD</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (async function(){
+            const token = localStorage.getItem('auth_token');
+            if (!token) { location.href = '/login.html'; return; }
+            const btnApi = document.getElementById('btnApiDocs');
+            const btnPerm = document.getElementById('btnPermissions');
+            const btnAudit = document.getElementById('btnAudit');
+            let role = 'user';
+            try {
+              const me = await fetch('/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+              if (me.ok) {
+                const info = await me.json();
+                role = String(info.role || 'user').toLowerCase();
+                window.__perms = info.permissions || {};
+              } else {
+                const data = token.split('.')[0];
+                const obj = JSON.parse(atob(data.replace(/-/g,'+').replace(/_/g,'/')));
+                role = String(obj.role || 'user').toLowerCase();
+                window.__perms = {};
+              }
+            } catch (e) {}
+            const isAdmin = role === 'admin';
+            const canSwagger = isAdmin || !!(window.__perms && window.__perms.swagger);
+            if (btnApi) btnApi.style.display = canSwagger ? '' : 'none';
+            if (btnPerm) btnPerm.style.display = isAdmin ? '' : 'none';
+            if (btnAudit) btnAudit.style.display = isAdmin ? '' : 'none';
+            const mApi = document.getElementById('menuApi');
+            const mPerm = document.getElementById('menuPerm');
+            const mAudit = document.getElementById('menuAudit');
+            if (mApi) mApi.style.display = canSwagger ? '' : 'none';
+            if (mPerm) mPerm.style.display = isAdmin ? '' : 'none';
+            if (mAudit) mAudit.style.display = isAdmin ? '' : 'none';
+            const mRefresh = document.getElementById('menuRefresh');
+            const mLogout = document.getElementById('menuLogout');
+            if (mRefresh) mRefresh.onclick = () => fetchData();
+            if (mLogout) mLogout.onclick = () => logout();
+            window.__currentRole = role;
+            window.__canInsert = isAdmin || !!(window.__perms && window.__perms.can_insert);
+            window.__canDelete = isAdmin || !!(window.__perms && window.__perms.can_delete);
+            window.__canUpdate = isAdmin || !!(window.__perms && window.__perms.can_update);
+        })();
+        let records = [];
+        let columns = [];
+        let primaryKey = null;
+        let currentType = 'TABLE';
+        let isEditing = false;
+        let originalRowData = null;
+        const formModal = new bootstrap.Modal(document.getElementById('formModal'));
+        const dynamicForm = document.getElementById('dynamicForm');
+        const dataContainer = document.getElementById('dataContainer');
+        const dbSelector = document.getElementById('dbSelector');
+        const objectSelector = document.getElementById('objectSelector');
+        const addButton = document.getElementById('addButton');
+        const modalHeader = document.getElementById('modalHeader');
+        const submitBtn = document.getElementById('submitBtn');
+        const serverSelector = document.getElementById('serverSelector');
+
+        async function init() {
+            try {
+                const token = localStorage.getItem('auth_token') || '';
+                const svRes = await fetch('/api/servers', { headers: { 'Authorization': 'Bearer ' + token } });
+                const servers = await svRes.json();
+                if (Array.isArray(servers) && servers.length > 0) {
+                    serverSelector.innerHTML = servers.map(s => `<option value="${s.server_name}">${s.display || (s.host + ',' + s.port)}</option>`).join('');
+                } else {
+                    serverSelector.innerHTML = `<option value="">(no servers)</option>`;
+                }
+                serverSelector.onchange = loadDatabases;
+                await loadDatabases();
+            } catch (err) {
+                serverSelector.innerHTML = `<option value="">Error loading servers</option>`;
+            }
+        }
+
+        async function loadDatabases() {
+            const sv = serverSelector.value || '';
+            try {
+                const params = new URLSearchParams({ system: '0' });
+                if (sv) params.append('sv', sv);
+                const res = await fetch('/api/databases?' + params.toString(), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+                const dbs = await res.json();
+                dbSelector.innerHTML = (Array.isArray(dbs) ? dbs : []).map(db => `<option value="${db}">${db}</option>`).join('');
+                if (Array.isArray(dbs) && dbs.length > 0) onDbChange();
+                else {
+                    objectSelector.innerHTML = `<option value="">No tables</option>`;
+                    dataContainer.innerHTML = `<div class="text-center py-5 text-muted">No databases available</div>`;
+                }
+            } catch (err) {
+                dbSelector.innerHTML = `<option value="">Error loading databases</option>`;
+            }
+        }
+
+        async function onDbChange() {
+            const db = dbSelector.value;
+            const sv = serverSelector.value || '';
+            if (!db) return;
+            objectSelector.innerHTML = `<option value="">Loading tables...</option>`;
+            try {
+                const params = new URLSearchParams({ includeViews: '1', system: '0' });
+                if (sv) params.append('sv', sv);
+                const res = await fetch(`/api/${db}/tables?${params.toString()}`, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+                let items = await res.json();
+                if (Array.isArray(items)) {
+                    items.sort((a,b)=>String(a).localeCompare(String(b)));
+                }
+                if (!Array.isArray(items) || items.length === 0) {
+                    dataContainer.innerHTML = `<div class="text-center py-5 text-muted">No tables found</div>`;
+                    objectSelector.innerHTML = `<option value="">No tables</option>`;
+                    return;
+                }
+                objectSelector.innerHTML = items.map(t => `<option value="${t}">${t}</option>`).join('');
+                fetchData();
+            } catch (err) {
+                objectSelector.innerHTML = `<option value="">Error</option>`;
+            }
+        }
+
+        async function fetchData() {
+            const db = dbSelector.value;
+            const object = objectSelector.value;
+            const sv = serverSelector.value || '';
+            if (!db || !object) return;
+
+            dataContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2">Loading data from server...</p></div>';
+            addButton.style.display = 'none';
+
+            try {
+                const colParams = new URLSearchParams();
+                if (sv) colParams.append('sv', sv);
+                const colRes = await fetch(`/api/${db}/${object}/columns?${colParams.toString()}`, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+                const colData = await colRes.json();
+                if (!Array.isArray(colData) || colData.length === 0) {
+                    throw new Error(`Could not read columns for ${object}. Table might not exist or permission denied.`);
+                }
+                columns = colData;
+                primaryKey = (columns.find(c => c.IS_PRIMARY_KEY === 1)?.COLUMN_NAME) || columns[0].COLUMN_NAME;
+                const limitSel = document.getElementById('rowLimit');
+                const topVal = limitSel ? limitSel.value : '100';
+                const dataParams = new URLSearchParams({ top: topVal });
+                if (sv) dataParams.append('sv', sv);
+                const res = await fetch(`/api/${db}/${object}?${dataParams.toString()}`, { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+                records = await res.json();
+                renderData();
+                addButton.style.display = window.__canInsert ? 'flex' : 'none';
+                addButton.onclick = () => openForm();
+            } catch (err) {
+                dataContainer.innerHTML = `
+                    <div class="alert alert-danger m-3 shadow-sm">
+                        <div class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i>Database Error</div>
+                        <div class="small mt-1 text-break">${err.message}</div>
+                        <div class="mt-2 p-2 bg-white rounded border small text-muted">
+                            <strong>Debug Info:</strong><br>
+                            DB: ${db}<br>
+                            Object: ${object}<br>
+                            Type: ${currentType}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger mt-3 w-100" onclick="fetchData()">Try Again</button>
+                    </div>`;
+            }
+        }
+
+        function renderData() {
+            if (!Array.isArray(columns) || columns.length === 0) {
+                dataContainer.innerHTML = '<div class="alert alert-warning m-3">Table structure not loaded. Please refresh.</div>';
+                return;
+            }
+            if (!Array.isArray(records) || records.length === 0) {
+                dataContainer.innerHTML = '<div class="text-center py-5 text-muted">No records found</div>';
+                return;
+            }
+            let html = `
+                <div class="table-responsive" style="max-height: 70vh; overflow: auto;">
+                    <table class="table table-sm table-bordered table-hover bg-white mb-0" style="font-size: 0.7rem; min-width: 900px;">
+                        <thead class="table-light sticky-top" style="z-index: 10;">
+                            <tr>
+                                <th class="text-center" style="width: 40px;">#</th>
+                                ${columns.map(col => `
+                                    <th class="text-truncate">
+                                        ${col.COLUMN_NAME}
+                                        <div class="text-muted" style="font-size: 0.6rem; font-weight: normal;">${col.DATA_TYPE}</div>
+                                    </th>
+                                `).join('')}
+                                ${window.__canDelete ? '<th class="text-center" style="width: 90px;">Actions</th>' : ''}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${records.map((item, idx) => `
+                                <tr onclick='openForm(${JSON.stringify(item).replace(/'/g, "&apos;")})' style="cursor: pointer;">
+                                    <td class="text-center text-muted bg-light">${idx + 1}</td>
+                                    ${columns.map(col => {
+                                        const val = item[col.COLUMN_NAME];
+                                        return `<td class="text-truncate" style="max-width: 150px;">${val !== null ? val : '<span class="text-muted">NULL</span>'}</td>`;
+                                    }).join('')}
+                                    ${window.__canDelete ? `<td class="text-center">
+                                        <button class="btn btn-sm btn-outline-danger" onclick='event.stopPropagation(); deleteRecord(${JSON.stringify((records[idx] || {})[primaryKey])})'><i class="bi bi-trash"></i></button>
+                                    </td>` : ''}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-2 text-muted small bg-light border-top">
+                    Showing ${records.length} rows (${(document.getElementById('rowLimit')?.value || '100') === 'all' ? 'All' : 'Top ' + (document.getElementById('rowLimit')?.value || '100')}). Tap any row to Edit or use the trash icon to Delete.
+                </div>
+            `;
+            dataContainer.innerHTML = html;
+            addButton.style.display = window.__canInsert ? 'flex' : 'none';
+        }
+
+        function filterData() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = records.filter(r => 
+                Object.values(r).some(val => String(val).toLowerCase().includes(q))
+            );
+            const originalRecords = records;
+            records = filtered;
+            renderData();
+            records = originalRecords;
+        }
+
+        async function openSPExecution(spName, dbOverride = null) {
+            const db = dbOverride || dbSelector.value;
+            const sv = serverSelector ? serverSelector.value : '';
+            const fieldsContainer = document.getElementById('formFields');
+            const resultsContainer = document.getElementById('spExecutionResults');
+            fieldsContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading parameters...</div>';
+            resultsContainer.classList.add('d-none');
+            resultsContainer.innerHTML = '';
+            
+            document.getElementById('formTitle').innerText = 'Execute SP: ' + spName;
+            modalHeader.className = 'modal-header sp-header';
+            submitBtn.innerText = 'EXECUTE PROCEDURE';
+            submitBtn.className = 'btn btn-sp py-3 fw-bold';
+            document.getElementById('deleteBtn').style.display = 'none';
+
+            formModal.show();
+
+            try {
+                const res = await fetch(`/api/${db}/procedures/${spName}/params`);
+                const params = await res.json();
+                fieldsContainer.innerHTML = '';
+                
+                if (params.length === 0) {
+                    fieldsContainer.innerHTML = '<div class="alert alert-info py-2 small">This procedure has no parameters.</div>';
+                }
+
+                params.forEach(p => {
+                    const name = p.ParameterName;
+                    const type = p.DataType;
+                    const div = document.createElement('div');
+                    div.className = 'mb-3';
+                    div.innerHTML = `
+                        <label class="form-label fw-bold small mb-1">${name} <span class="text-muted" style="font-weight:normal">(${type})</span></label>
+                        <input type="text" class="form-control" id="sp_field_${name}" data-param="${name}">
+                    `;
+                    fieldsContainer.appendChild(div);
+                });
+
+                dynamicForm.onsubmit = async (e) => {
+                    e.preventDefault();
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> EXECUTING...';
+                    
+                    const payload = {};
+                    params.forEach(p => {
+                        payload[p.ParameterName] = document.getElementById(`sp_field_${p.ParameterName}`).value;
+                    });
+
+                    try {
+                        const url = `/api/${db}/procedures/${spName}/execute`;
+                        const execRes = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const result = await execRes.json();
+                        
+                        resultsContainer.classList.remove('d-none');
+                        if (result.error) {
+                            resultsContainer.innerHTML = `<div class="alert alert-danger m-2 small">${result.error}</div>`;
+                        } else {
+                            // Show results (first recordset)
+                            const data = result.recordsets[0];
+                            if (!data || data.length === 0) {
+                                resultsContainer.innerHTML = `<div class="alert alert-success m-2 small">Execution completed. No records returned.</div>`;
+                            } else {
+                                const tableHtml = `
+                                    <table class="table table-sm table-striped mb-0" style="font-size: 0.65rem;">
+                                        <thead><tr>${Object.keys(data[0]).map(k => `<th>${k}</th>`).join('')}</tr></thead>
+                                        <tbody>${data.map(row => `<tr>${Object.values(row).map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody>
+                                    </table>
+                                `;
+                                resultsContainer.innerHTML = tableHtml;
+                            }
+                            // Show return value and output
+                            resultsContainer.innerHTML += `
+                                <div class="bg-light p-2 small border-top">
+                                    <strong>Return:</strong> ${result.returnValue} | 
+                                    <strong>Output:</strong> ${JSON.stringify(result.output)}
+                                </div>
+                            `;
+                        }
+                    } catch (err) {
+                        alert('Execution failed: ' + err.message);
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = 'EXECUTE PROCEDURE';
+                    }
+                };
+            } catch (err) {
+                fieldsContainer.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            }
+        }
+
+        // Open Procedure Definition Editor (ALTER / CREATE)
+        async function openSPEditor(spName = null, createMode = false, dbOverride = null) {
+            const db = dbOverride || dbSelector.value;
+            const fieldsContainer = document.getElementById('formFields');
+            const resultsContainer = document.getElementById('spExecutionResults');
+            resultsContainer.classList.add('d-none');
+            resultsContainer.innerHTML = '';
+
+            modalHeader.className = 'modal-header sp-header';
+            submitBtn.className = 'btn btn-sp py-3 fw-bold';
+            document.getElementById('deleteBtn').style.display = 'none';
+
+            let initialSQL = '';
+            if (createMode) {
+                const schema = 'dbo';
+                initialSQL = [
+                    'SET ANSI_NULLS ON',
+                    'SET QUOTED_IDENTIFIER ON',
+                    '',
+                    `CREATE PROCEDURE ${schema}.NewProcedure`,
+                    'AS',
+                    'BEGIN',
+                    '    SET NOCOUNT ON;',
+                    '    -- TODO: add statements here',
+                    'END'
+                ].join('\\n');
+                document.getElementById('formTitle').innerText = 'Create New Stored Procedure';
+            } else {
+                document.getElementById('formTitle').innerText = 'Edit Procedure: ' + spName;
+                try {
+                    const res = await fetch(`/api/${db}/procedures/${spName}/definition`);
+                    const def = await res.json();
+                    if (def.error) throw new Error(def.error);
+                    initialSQL = def.definition || '';
+                } catch (err) {
+                    initialSQL = '-- Error loading definition: ' + err.message + '\\n-- You can still paste an ALTER script here.';
+                }
+            }
+
+            fieldsContainer.innerHTML = `
+                <label class="form-label fw-bold small mb-2">T-SQL Script</label>
+                <textarea id="sqlEditor" class="form-control" rows="16" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></textarea>
+                <div class="small text-muted mt-2">
+                    GO separators are supported. Press the button below to ${createMode ? 'CREATE' : 'ALTER'}.
+                </div>
+            `;
+            document.getElementById('sqlEditor').value = initialSQL;
+            submitBtn.innerText = createMode ? 'CREATE PROCEDURE' : 'ALTER PROCEDURE';
+            formModal.show();
+
+            dynamicForm.onsubmit = async (e) => {
+                e.preventDefault();
+                const sqlText = document.getElementById('sqlEditor').value;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running...';
+                try {
+                    const url = createMode ? `/api/${db}/procedures/create` : `/api/${db}/procedures/${spName}/alter`;
+                    const res = await fetch(url, {
+                        method: createMode ? 'POST' : 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sql: sqlText })
+                    });
+                    const out = await res.json();
+                    if (!res.ok) throw new Error(out.error || 'Execution failed');
+                    alert(out.message || 'Done');
+                    formModal.hide();
+                    if (!createMode) {
+                        // Refresh nothing special; user can re-open
+                    }
+                } catch (err) {
+                    alert('SQL error: ' + err.message);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = createMode ? 'CREATE PROCEDURE' : 'ALTER PROCEDURE';
+                }
+            };
+        }
+
+        async function openForm(data = null) {
+            isEditing = Boolean(data);
+            originalRowData = data || null;
+            const fieldsContainer = document.getElementById('formFields');
+            const resultsContainer = document.getElementById('spExecutionResults');
+            fieldsContainer.innerHTML = '<div class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading structure...</div>';
+            resultsContainer.classList.add('d-none');
+            
+            document.getElementById('formTitle').innerText = data ? `Edit ${objectSelector.value}` : `New ${objectSelector.value}`;
+            modalHeader.className = 'modal-header';
+            submitBtn.innerText = 'SAVE TO DATABASE';
+            submitBtn.className = 'btn btn-ssms py-3 fw-bold';
+            
+            formModal.show();
+
+            const canUpdate = window.__canUpdate;
+            const canInsert = window.__canInsert;
+            const canDelete = window.__canDelete;
+            submitBtn.style.display = isEditing ? (canUpdate ? '' : 'none') : (canInsert ? '' : 'none');
+            document.getElementById('deleteBtn').style.display = isEditing && canDelete ? '' : 'none';
+
+            if (!columns || columns.length === 0) {
+                const db = dbSelector.value;
+                const object = objectSelector.value;
+                const colRes = await fetch(`/api/${db}/${object}/columns`);
+                columns = await colRes.json();
+            }
+
+            if (!Array.isArray(columns) || columns.length === 0) {
+                fieldsContainer.innerHTML = '<div class="alert alert-danger">Could not load table structure.</div>';
+                return;
+            }
+
+            fieldsContainer.innerHTML = '';
+            columns.forEach(col => {
+                const name = col.COLUMN_NAME;
+                const type = col.DATA_TYPE;
+                const isIdentity = Number(col.IS_IDENTITY) === 1;
+                
+                const div = document.createElement('div');
+                div.className = 'mb-3';
+                
+                let inputHtml = '';
+                const val = data ? data[name] : '';
+                const readonly = isEditing ? ((!canUpdate || isIdentity) ? 'readonly' : '') : (isIdentity ? 'readonly' : '');
+                const bg = isIdentity ? 'bg-light' : '';
+
+                if (type.includes('text') || type.includes('max')) {
+                    inputHtml = `<textarea class="form-control" id="field_${name}" ${readonly} rows="3">${val || ''}</textarea>`;
+                } else if (type.includes('int') || type.includes('decimal') || type.includes('numeric') || type.includes('float')) {
+                    inputHtml = `<input type="number" step="any" class="form-control ${bg}" id="field_${name}" value="${val}" ${readonly}>`;
+                } else if (type.includes('date') || type.includes('time')) {
+                    const dateVal = val ? new Date(val).toISOString().split('T')[0] : '';
+                    inputHtml = `<input type="date" class="form-control" id="field_${name}" value="${dateVal}" ${readonly}>`;
+                } else {
+                    inputHtml = `<input type="text" class="form-control ${bg}" id="field_${name}" value="${val || ''}" ${readonly}>`;
+                }
+
+                div.innerHTML = `
+                    <label class="form-label fw-bold small mb-1">${name} <span class="text-muted" style="font-weight:normal">(${type})</span></label>
+                    ${inputHtml}
+                `;
+                fieldsContainer.appendChild(div);
+                const inp = div.querySelector(`#field_${name}`);
+                if (inp) inp.addEventListener('input', () => updateSqlPreview(Boolean(data)));
+            });
+
+            const sqlBox = document.getElementById('sqlPreviewBox');
+            const sqlPre = document.getElementById('sqlPreview');
+            sqlBox.classList.remove('d-none');
+                function fmt(val, type) {
+                    const t = String(type || '').toLowerCase();
+                    if (val === null || val === undefined) return 'NULL';
+                    const s = String(val);
+                    if (t.includes('char') || t.includes('text') || t.includes('nchar') || t.includes('varchar') || t.includes('xml') || t.includes('uniqueidentifier')) {
+                        return `'${s.replace(/'/g, "''")}'`;
+                    }
+                    if (s === '') return 'NULL';
+                    if (t.includes('date') || t.includes('time')) {
+                        return `'${s.replace(/'/g, "''")}'`;
+                    }
+                    if (isNaN(Number(s))) return `'${s.replace(/'/g, "''")}'`;
+                    return s;
+                }
+            function updateSqlPreview(isEdit) {
+                const tableFull = objectSelector.value;
+                const list = [];
+                columns.forEach(col => {
+                    const name = col.COLUMN_NAME;
+                    const value = document.getElementById(`field_${name}`)?.value ?? '';
+                    const type = col.DATA_TYPE;
+                    const isIdentity = Number(col.IS_IDENTITY) === 1;
+                    if (!isIdentity || isEdit) list.push({ name, value, type, isIdentity });
+                });
+                if (isEdit) {
+                    const sets = list.map(x => `[${x.name}] = ${fmt(x.value, x.type)}`).join(', ');
+                    const idVal = (originalRowData && originalRowData[primaryKey] !== undefined)
+                      ? originalRowData[primaryKey]
+                      : (document.getElementById(`field_${primaryKey}`)?.value ?? '');
+                    sqlPre.textContent = `UPDATE [${tableFull.split('.').join('].[')}] SET ${sets} WHERE [${primaryKey}] = ${fmt(idVal, columns.find(c=>c.COLUMN_NAME===primaryKey)?.DATA_TYPE)};`;
+                } else {
+                    const cols = list.filter(x => !x.isIdentity).map(x => `[${x.name}]`).join(', ');
+                    const vals = list.filter(x => !x.isIdentity).map(x => fmt(x.value, x.type)).join(', ');
+                    sqlPre.textContent = `INSERT INTO [${tableFull.split('.').join('].[')}] (${cols}) VALUES (${vals});`;
+                }
+            }
+            updateSqlPreview(isEditing);
+
+            if (data) {
+                const canDelete = (window.__currentRole === 'admin') || !!window.__canDelete;
+                document.getElementById('deleteBtn').style.display = canDelete ? 'block' : 'none';
+                if (canDelete) document.getElementById('deleteBtn').onclick = () => deleteRecord(data[primaryKey]);
+            } else {
+                document.getElementById('deleteBtn').style.display = 'none';
+            }
+            
+            dynamicForm.onsubmit = async (e) => {
+                e.preventDefault();
+                const db = dbSelector.value;
+                const table = objectSelector.value;
+                const isEdit = isEditing;
+                
+                function coerce(val, type, originalVal) {
+                    if (val === null || val === undefined) return originalVal === null ? null : '';
+                    const s = String(val);
+                    if (s.trim().toUpperCase() === 'NULL') return null;
+                    const t = String(type || '').toLowerCase();
+                    if (t.includes('char') || t.includes('text') || t.includes('nchar') || t.includes('varchar') || t.includes('xml') || t.includes('uniqueidentifier')) {
+                        if (s === '') return originalVal === null ? null : '';
+                        return s;
+                    }
+                    if (s === '') return null;
+                    if (t.includes('int') || t.includes('decimal') || t.includes('numeric') || t.includes('float') || t.includes('money')) {
+                        const n = Number(s);
+                        return isNaN(n) ? null : n;
+                    }
+                    if (t.includes('date') || t.includes('time')) {
+                        return s === '' ? null : s;
+                    }
+                    if (t.includes('bit')) {
+                        if (s === '1' || s.toLowerCase() === 'true') return 1;
+                        if (s === '0' || s.toLowerCase() === 'false') return 0;
+                        return s === '' ? null : s;
+                    }
+                    return s;
+                }
+                const payload = {};
+                columns.forEach(col => {
+                    const name = col.COLUMN_NAME;
+                    const type = col.DATA_TYPE;
+                    const isIdentity = Number(col.IS_IDENTITY) === 1;
+                    if (isIdentity && isEdit) return; // do not update identity columns
+                    const inp = document.getElementById(`field_${name}`);
+                    const raw = inp ? inp.value : '';
+                    const originalVal = originalRowData ? originalRowData[name] : undefined;
+                    payload[name] = coerce(raw, type, originalVal);
+                });
+
+                const idValue = (originalRowData && originalRowData[primaryKey] !== undefined)
+                  ? originalRowData[primaryKey]
+                  : document.getElementById(`field_${primaryKey}`).value;
+                const sv = serverSelector.value || '';
+                const qp = new URLSearchParams();
+                if (sv) qp.append('sv', sv);
+                const url = isEdit 
+                  ? `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}/${encodeURIComponent(primaryKey)}/${encodeURIComponent(idValue)}?${qp.toString()}`
+                  : `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}?${qp.toString()}`;
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    formModal.hide();
+                    fetchData();
+                    showToast(isEdit ? 'Updated successfully' : 'Added successfully', 'success');
+                } else {
+                    const err = await res.json();
+                    showToast('Save failed: ' + (err.error || res.statusText), 'danger');
+                }
+            };
+            
+            formModal.show();
+        }
+
+        function confirmDelete(sqlText){
+            return new Promise(resolve=>{
+                const tpl = `
+                <div class="modal fade" id="delModal" tabindex="-1">
+                  <div class="modal-dialog">
+                    <div class="modal-content">
+                      <div class="modal-header bg-danger text-white">
+                        <strong class="modal-title">ยืนยันการลบ</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">
+                        <div class="small mb-2">ใส่รหัสผ่านเพื่อลบ</div>
+                        <input id="del_code" class="form-control" placeholder="รหัสผ่าน">
+                        <div class="mt-3 small text-muted">
+                          SQL Preview:<br>
+                          <pre class="border bg-light p-2" style="white-space:pre-wrap">${sqlText}</pre>
+                        </div>
+                      </div>
+                      <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-danger" id="del_confirm">Delete</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>`;
+                const div = document.createElement('div'); div.innerHTML = tpl; document.body.appendChild(div.firstElementChild);
+                const modalEl = document.getElementById('delModal');
+                const modal = new bootstrap.Modal(modalEl); modal.show();
+                document.getElementById('del_confirm').onclick = ()=>{
+                    const code = document.getElementById('del_code').value.trim();
+                    const ok = code === '28914';
+                    if (!ok) showToast('ยกเลิกการลบ: รหัสผ่านไม่ถูกต้อง', 'danger');
+                    resolve(ok);
+                    modal.hide();
+                };
+                modalEl.addEventListener('hidden.bs.modal', ()=> modalEl.remove());
+            });
+        }
+
+        async function deleteRecord(idValue) {
+            const db = dbSelector.value;
+            const table = objectSelector.value;
+            const sv = serverSelector.value || '';
+            const sqlText = `DELETE FROM [${table.split('.').join('].[')}] WHERE [${primaryKey}] = '${String(idValue).replace(/'/g,"''")}';`;
+            const ok = await confirmDelete(sqlText);
+            if (!ok) return;
+            {
+                const params = new URLSearchParams();
+                if (sv) params.append('sv', sv);
+                const url = `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}/${encodeURIComponent(primaryKey)}/${encodeURIComponent(idValue)}?${params.toString()}`;
+                const res = await fetch(url, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || ''), 'X-Delete-Code': '28914' } });
+                if (res.ok) {
+                    formModal.hide();
+                    fetchData();
+                    showToast('Deleted successfully', 'success');
+                } else {
+                    const err = await res.json();
+                    showToast('Delete failed: ' + (err.error || res.statusText), 'danger');
+                }
+            }
+        }
+
+        init();
+
+        function showToast(message, type = 'success') {
+            const id = 't_' + Math.random().toString(36).slice(2);
+            const bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : 'bg-secondary';
+            const html = `
+              <div id="${id}" class="toast align-items-center text-white ${bg} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                  <div class="toast-body small">${message}</div>
+                  <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+              </div>
+            `;
+            const container = document.getElementById('toastContainer');
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            const toastEl = div.firstElementChild;
+            container.appendChild(toastEl);
+            const toast = new bootstrap.Toast(toastEl, { delay: 2500 });
+            toast.show();
+            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        }
+
+        function openPermissionsModal(){
+            const tpl = `
+            <div class="modal fade" id="permModal" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header bg-warning text-dark">
+                    <strong class="modal-title">Add Permission</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-3">
+                      <div class="small text-muted mb-1">Existing Users</div>
+                      <div id="perm_users" class="border rounded p-2" style="max-height:180px;overflow:auto"></div>
+                    </div>
+                    <div class="mb-2"><label class="form-label small">User ID</label><input id="perm_uid" class="form-control" value="thanvasu"></div>
+                    <div class="mb-2"><label class="form-label small">Password</label><input id="perm_pwd" class="form-control" type="password" value="1234"></div>
+                    <div class="mb-2"><label class="form-label small">Role</label>
+                      <select id="perm_role" class="form-select">
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button class="btn btn-warning" id="perm_save">Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+            const div = document.createElement('div'); div.innerHTML = tpl; document.body.appendChild(div.firstElementChild);
+            const modal = new bootstrap.Modal(document.getElementById('permModal')); modal.show();
+            (async()=>{
+              const r = await fetch('/auth/users', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+              const users = await r.json();
+              const box = document.getElementById('perm_users');
+              box.innerHTML = (users || []).map(u => `
+                <div class="d-flex justify-content-between align-items-center py-1">
+                  <div>${u.id} <span class="badge bg-secondary">${u.role}</span></div>
+                  <button class="btn btn-sm btn-outline-danger" data-id="${u.id}"><i class="bi bi-trash"></i></button>
+                </div>
+              `).join('');
+              box.querySelectorAll('button[data-id]').forEach(btn=>{
+                btn.onclick = async ()=>{
+                  const uid = btn.getAttribute('data-id');
+                  if (!confirm('Delete user '+uid+' ?')) return;
+                  const d = await fetch('/auth/users/'+encodeURIComponent(uid), { method:'DELETE', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+                  const out = await d.json();
+                  if (d.ok) { showToast(out.message || 'Deleted', 'success'); modal.hide(); }
+                  else { showToast(out.error || 'Failed', 'danger'); }
+                };
+              });
+            })();
+            document.getElementById('perm_save').onclick = async () => {
+              const id = document.getElementById('perm_uid').value;
+              const password = document.getElementById('perm_pwd').value;
+              const role = document.getElementById('perm_role').value;
+              const res = await fetch('/auth/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') },
+                body: JSON.stringify({ id, password, role })
+              });
+              const out = await res.json();
+              if (res.ok) { showToast(out.message || 'Saved', 'success'); modal.hide(); }
+              else { showToast(out.error || 'Failed', 'danger'); }
+            };
+            document.getElementById('permModal').addEventListener('hidden.bs.modal', () => document.getElementById('permModal').remove());
+        }
+
+        function openAuditModal(){
+            const tpl = `
+            <div class="modal fade" id="auditModal" tabindex="-1">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header bg-info text-white">
+                    <strong class="modal-title">Audit Log</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="d-flex gap-2 mb-2">
+                      <input id="audit_filter_db" class="form-control form-control-sm" placeholder="Filter DB (optional)">
+                      <select id="audit_filter_action" class="form-select form-select-sm">
+                        <option value="">All</option>
+                        <option value="insert">insert</option>
+                        <option value="update">update</option>
+                        <option value="delete">delete</option>
+                      </select>
+                      <button class="btn btn-sm btn-primary" id="audit_reload">Reload</button>
+                    </div>
+                    <div id="audit_box" style="max-height:60vh;overflow:auto" class="border rounded"></div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+            const div = document.createElement('div'); div.innerHTML = tpl; document.body.appendChild(div.firstElementChild);
+            const modal = new bootstrap.Modal(document.getElementById('auditModal')); modal.show();
+            const load = async ()=>{
+              const db = document.getElementById('audit_filter_db').value;
+              const action = document.getElementById('audit_filter_action').value;
+              const params = new URLSearchParams({ limit: '100' });
+              if (db) params.append('db', db);
+              if (action) params.append('action', action);
+              const r = await fetch('/auth/audit?'+params.toString(), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+              const rows = await r.json();
+              const box = document.getElementById('audit_box');
+              box.innerHTML = `
+                <table class="table table-sm mb-0">
+                  <thead class="table-light sticky-top"><tr>
+                    <th>Time</th><th>User</th><th>Role</th><th>Action</th><th>DB</th><th>Object</th><th>ID</th>
+                  </tr></thead>
+                  <tbody>
+                    ${(rows||[]).map(x=>`
+                      <tr>
+                        <td class="small">${new Date(x.ts).toLocaleString()}</td>
+                        <td class="small">${x.user_id}</td>
+                        <td class="small">${x.role}</td>
+                        <td class="small">${x.action}</td>
+                        <td class="small">${x.db}</td>
+                        <td class="small">${x.object}</td>
+                        <td class="small">${x.id_col || ''}=${x.id_value || ''}</td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>`;
+            };
+            document.getElementById('audit_reload').onclick = load;
+            load();
+            document.getElementById('auditModal').addEventListener('hidden.bs.modal', () => document.getElementById('auditModal').remove());
+        }
+
+        function logout(){
+            try { localStorage.removeItem('auth_token'); } catch (e) {}
+            location.href = '/login.html';
+        }
+    </script>
+</body>
+</html>

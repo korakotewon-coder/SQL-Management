@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Audit Log</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark">
+      <div class="container-fluid">
+        <span class="navbar-brand">Audit Log</span>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-light" href="/">Back</a>
+          <button class="btn btn-sm btn-outline-warning" onclick="logout()">Logout</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container py-3">
+      <div class="card">
+        <div class="card-body">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small">Filter DB</label>
+              <input id="audit_filter_db" class="form-control form-control-sm" placeholder="e.g. CFS_BAMBAM_HQ">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">User ID</label>
+              <input id="audit_filter_user" class="form-control form-control-sm" placeholder="e.g. admin">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">Action</label>
+              <select id="audit_filter_action" class="form-select form-select-sm">
+                <option value="">All</option>
+                <option value="insert">insert</option>
+                <option value="update">update</option>
+                <option value="delete">delete</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small">Limit</label>
+              <select id="audit_limit" class="form-select form-select-sm">
+                <option value="500">500</option>
+                <option value="200">200</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <div class="col-md-1 text-end">
+              <button class="btn btn-primary btn-sm w-100" id="audit_reload">Reload</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-body" id="audit_box" style="max-height:70vh;overflow:auto">
+          Loading...
+        </div>
+      </div>
+    </div>
+
+    <div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index:1080"></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      (async function(){
+        const token = localStorage.getItem('auth_token');
+        if (!token) { location.href = '/login.html'; return; }
+        try{
+          const me = await fetch('/auth/me', { headers: { 'Authorization':'Bearer '+token }});
+          if (!me.ok) throw new Error('unauth');
+          const info = await me.json();
+          if (String(info.role || '').toLowerCase() !== 'admin') { location.href = '/'; return; }
+        }catch(e){
+          location.href = '/login.html';
+          return;
+        }
+      })();
+      function logout(){ localStorage.removeItem('auth_token'); location.href='/login.html'; }
+      function showToast(message, type = 'success') {
+        const id = 't_' + Math.random().toString(36).slice(2);
+        const bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : 'bg-secondary';
+        const html = '<div id="'+id+'" class="toast align-items-center text-white '+bg+' border-0" role="alert" aria-live="assertive" aria-atomic="true"><div class="d-flex"><div class="toast-body small">'+message+'</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>';
+        const container = document.getElementById('toastContainer');
+        const div = document.createElement('div'); div.innerHTML = html; const toastEl = div.firstElementChild; container.appendChild(toastEl);
+        const toast = new bootstrap.Toast(toastEl, { delay: 2500 }); toast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+      }
+      async function load(){
+        const limit = document.getElementById('audit_limit').value || '100';
+        const db = document.getElementById('audit_filter_db').value || '';
+        const action = document.getElementById('audit_filter_action').value || '';
+        const user = document.getElementById('audit_filter_user').value || '';
+        const params = new URLSearchParams({ limit });
+        if (db) params.append('db', db);
+        if (action) params.append('action', action);
+        if (user) params.append('user_id', user);
+        const r = await fetch('/auth/audit?'+params.toString(), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        if (!r.ok) {
+          const err = await r.json().catch(()=>({error:'Forbidden'}));
+          showToast(err.error || 'Forbidden', 'danger');
+          document.getElementById('audit_box').innerHTML = '<div class="alert alert-danger">Forbidden</div>';
+          return;
+        }
+        const rows = await r.json();
+        const box = document.getElementById('audit_box');
+        box.innerHTML = `
+          <table class="table table-sm">
+            <thead class="table-light sticky-top"><tr>
+              <th>Time</th><th>User</th><th>Role</th><th>Action</th><th>DB</th><th>Object</th><th>ID</th>
+            </tr></thead>
+            <tbody>
+              ${(rows||[]).map(x=>`
+                <tr>
+                  <td class="small">${new Date(x.ts).toLocaleString()}</td>
+                  <td class="small">${x.user_id}</td>
+                  <td class="small">${x.role}</td>
+                  <td class="small">${x.action}</td>
+                  <td class="small">${x.db}</td>
+                  <td class="small">${x.object}</td>
+                  <td class="small">${x.id_col || ''}=${x.id_value || ''}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+      }
+      document.getElementById('audit_reload').onclick = load;
+      load();
+    </script>
+  </body>
+  </html>

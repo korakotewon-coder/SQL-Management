@@ -1,0 +1,297 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Permissions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark">
+      <div class="container-fluid">
+        <span class="navbar-brand">Permissions Manager</span>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-light" href="/">Back</a>
+          <button class="btn btn-sm btn-outline-warning" onclick="logout()">Logout</button>
+        </div>
+      </div>
+    </nav>
+    <div class="container py-3">
+      <div class="card">
+        <div class="card-header">Edit User</div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-3">
+              <select id="userSelect" class="form-select" title="Select user">
+                <option value="">เลือกผู้ใช้...</option>
+              </select>
+            </div>
+            <div class="col-md-3"><input id="uid" class="form-control" placeholder="User ID" value="thanvasu" readonly></div>
+            <div class="col-md-3"><input id="pwd" class="form-control" placeholder="Password" value="1234" type="password"></div>
+            <div class="col-md-2">
+              <select id="role" class="form-select">
+                <option value="user">user</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+            <div class="col-md-4 text-end">
+              <div class="btn-group">
+                <button class="btn btn-outline-primary" id="createUser">Create User</button>
+                <button class="btn btn-primary" id="saveUser">Save</button>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="p_insert"><label class="form-check-label" for="p_insert">Can Insert</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="p_update" checked><label class="form-check-label" for="p_update">Can Update</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="p_delete"><label class="form-check-label" for="p_delete">Can Delete</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="p_design"><label class="form-check-label" for="p_design">Can Design</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="p_swagger"><label class="form-check-label" for="p_swagger">See Swagger</label></div>
+            
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Server Access per User</span>
+        </div>
+        <div class="card-body">
+          <div class="small text-muted mb-2">เลือก User แล้วกำหนดสิทธิ์เข้า Server</div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-12">
+              <input id="svaccSearch" class="form-control form-control-sm" placeholder="ค้นหา Server...">
+            </div>
+          </div>
+          <div id="svAccessBox" class="border rounded p-2" style="max-height:40vh;overflow:auto">Select a user to load server access.</div>
+        </div>
+      </div>
+
+      
+
+      <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Database Access per User (by Server)</span>
+        </div>
+        <div class="card-body">
+          <div class="small text-muted mb-2">เลือก User และ Server แล้วตั้งสิทธิ์เข้าถึง Database</div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-6">
+              <select id="dbaccServer" class="form-select form-select-sm">
+                <option value="">เลือก Server...</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <input id="dbaccSearch" class="form-control form-control-sm" placeholder="ค้นหา Database...">
+            </div>
+          </div>
+          <div id="dbAccessBox" class="border rounded p-2" style="max-height:60vh;overflow:auto">Select a user and server to load database access.</div>
+        </div>
+      </div>
+      
+      <!-- Users list removed: page focuses on editing selected user -->
+    </div>
+
+    <div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index:1080"></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      (async function(){
+        const token = localStorage.getItem('auth_token');
+        if (!token) { location.href = '/login.html'; return; }
+        try{
+          const me = await fetch('/auth/me', { headers: { 'Authorization':'Bearer '+token }});
+          if (!me.ok) throw new Error('unauth');
+          const info = await me.json();
+          if (String(info.role || '').toLowerCase() !== 'admin') { location.href = '/'; return; }
+        }catch(e){
+          location.href = '/login.html';
+          return;
+        }
+      })();
+      function showToast(message, type = 'success') {
+        const id = 't_' + Math.random().toString(36).slice(2);
+        const bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : 'bg-secondary';
+        const html = '<div id="'+id+'" class="toast align-items-center text-white '+bg+' border-0" role="alert" aria-live="assertive" aria-atomic="true"><div class="d-flex"><div class="toast-body small">'+message+'</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div></div>';
+        const container = document.getElementById('toastContainer');
+        const div = document.createElement('div'); div.innerHTML = html; const toastEl = div.firstElementChild; container.appendChild(toastEl);
+        const toast = new bootstrap.Toast(toastEl, { delay: 2500 }); toast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+      }
+      async function loadUsers(){
+        const r = await fetch('/auth/users', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        let users = await r.json();
+        if (!Array.isArray(users)) users = [];
+        const sel = document.getElementById('userSelect');
+        sel.innerHTML = '<option value=\"\">เลือกผู้ใช้...</option>' + users.map(u => `<option value="${u.id}">${u.id} (${u.role})</option>`).join('');
+        if (users.length > 0) {
+          sel.value = users[0].id;
+          await setCurrentUser(users[0].id);
+        }
+      }
+      let __createMode = false;
+      async function setCurrentUser(id){
+        __createMode = false;
+        document.getElementById('uid').readOnly = true;
+        document.getElementById('uid').value = id || '';
+        if (!id) return;
+        const info = await fetch('/auth/permissions?id='+encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        const perms = await info.json();
+        if (perms && perms.permissions) {
+          document.getElementById('p_insert').checked = !!perms.permissions.can_insert;
+          document.getElementById('p_update').checked = !!perms.permissions.can_update;
+          document.getElementById('p_delete').checked = !!perms.permissions.can_delete;
+          document.getElementById('p_design').checked = !!perms.permissions.can_design;
+          document.getElementById('p_swagger').checked = !!perms.permissions.swagger;
+        }
+        await loadServerAccess(id);
+        await loadDbaccServers();
+        const sv = document.getElementById('dbaccServer').value || '';
+        await loadDbAccess(id, sv);
+      }
+      document.getElementById('userSelect').addEventListener('change', async ()=>{
+        const id = document.getElementById('userSelect').value || '';
+        await setCurrentUser(id);
+      });
+      document.getElementById('createUser').addEventListener('click', ()=>{
+        __createMode = true;
+        document.getElementById('userSelect').value = '';
+        document.getElementById('uid').readOnly = false;
+        document.getElementById('uid').value = '';
+        document.getElementById('pwd').value = '';
+        document.getElementById('role').value = 'user';
+        document.getElementById('p_insert').checked = false;
+        document.getElementById('p_update').checked = false;
+        document.getElementById('p_delete').checked = false;
+        document.getElementById('p_design').checked = false;
+        document.getElementById('p_swagger').checked = false;
+        document.getElementById('svAccessBox').textContent = 'Select a user to load server access.';
+        document.getElementById('dbAccessBox').textContent = 'Select a user and server to load database access.';
+      });
+      
+      document.getElementById('saveUser').onclick = async ()=>{
+        const id = document.getElementById('uid').value;
+        const password = document.getElementById('pwd').value;
+        const role = document.getElementById('role').value;
+        const permissions = {
+          can_insert: document.getElementById('p_insert').checked,
+          can_update: document.getElementById('p_update').checked,
+          can_delete: document.getElementById('p_delete').checked,
+          can_design: document.getElementById('p_design').checked,
+          swagger: document.getElementById('p_swagger').checked
+        };
+        const h = { 'Content-Type':'application/json', 'Authorization':'Bearer '+ (localStorage.getItem('auth_token') || '') };
+        const rUser = await fetch('/auth/users', { method:'POST', headers: h, body: JSON.stringify({ id, password, role }) });
+        const outUser = await rUser.json();
+        if (!rUser.ok) { showToast(outUser.error || 'Save user failed', 'danger'); return; }
+        const rPerm = await fetch('/auth/permissions', { method:'POST', headers: h, body: JSON.stringify({ id, permissions }) });
+        const outPerm = await rPerm.json();
+        if (!rPerm.ok) { showToast(outPerm.error || 'Save permissions failed', 'danger'); return; }
+        await loadUsers();
+        if (__createMode) {
+          document.getElementById('uid').readOnly = true;
+          document.getElementById('userSelect').value = id;
+          await setCurrentUser(id);
+          __createMode = false;
+        }
+        loadUsers();
+      function logout(){ localStorage.removeItem('auth_token'); location.href='/login.html'; }
+      loadUsers();
+      
+
+      // Server Access per User (by Connection)
+      let __svRows = [];
+      let __connInfo = new Map();
+      async function loadServerAccess(userId){
+        if (!userId) { __svRows = []; renderServerAccessBox(userId); return; }
+        // load connection info for display
+        const rc = await fetch('/auth/connections', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        const cons = await rc.json();
+        if (Array.isArray(cons)) {
+          __connInfo = new Map(cons.map(c => [c.name, `${c.host},${c.port} (${c.user})`]));
+        } else {
+          __connInfo = new Map();
+        }
+        // load access rows
+        const r = await fetch('/auth/connection-access?user_id='+encodeURIComponent(userId), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        __svRows = await r.json();
+        if (!Array.isArray(__svRows)) __svRows = [];
+        renderServerAccessBox(userId);
+      }
+      function renderServerAccessBox(userId){
+        const box = document.getElementById('svAccessBox');
+        const q = String(document.getElementById('svaccSearch').value || '').toLowerCase();
+        const rows = __svRows.filter(s => !q || String(s.name).toLowerCase().includes(q) || String(__connInfo.get(s.name) || '').toLowerCase().includes(q));
+        if (!userId) { box.textContent = 'Select a user to load server access.'; return; }
+        box.innerHTML = (rows||[]).map(s => `
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="sv_${s.name}" ${s.allowed ? 'checked' : ''} data-sv="${s.name}">
+            <label class="form-check-label" for="sv_${s.name}">${s.name} <span class="text-muted small">${__connInfo.get(s.name) || ''}</span></label>
+          </div>`).join('') || '<div class="text-muted">No servers</div>';
+        box.querySelectorAll('input[data-sv]').forEach(inp=>{
+          inp.onchange = async ()=>{
+            const name = inp.getAttribute('data-sv');
+            const allowed = inp.checked;
+            const r2 = await fetch('/auth/connection-access', { method:'POST', headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+ (localStorage.getItem('auth_token') || '') }, body: JSON.stringify({ user_id: userId, name, allowed }) });
+            const out2 = await r2.json();
+            if (r2.ok) showToast('Saved server access', 'success'); else showToast(out2.error || 'Failed', 'danger');
+          };
+        });
+      }
+      document.getElementById('svaccSearch').addEventListener('input', ()=>{
+        const userId = document.getElementById('uid').value || '';
+        renderServerAccessBox(userId);
+      });
+
+      // Database Access per User (by Server)
+      let __dbRows = [];
+      let __servers = [];
+      async function loadDbaccServers(){
+        const r = await fetch('/api/servers', { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        const list = await r.json();
+        __servers = Array.isArray(list) ? list : [];
+        const sel = document.getElementById('dbaccServer');
+        const sv = sel.value;
+        sel.innerHTML = '<option value=\"\">เลือก Server...</option>' + __servers.map(s => `<option value=\"${s.server_name}\">${s.display}</option>`).join('');
+        if (sv && __servers.find(x=>x.server_name===sv)) sel.value = sv;
+      }
+      function renderDbAccessBox(userId, serverName){
+        const box = document.getElementById('dbAccessBox');
+        const q = String(document.getElementById('dbaccSearch').value || '').toLowerCase();
+        const rows = __dbRows.filter(d => !q || String(d.db_name).toLowerCase().includes(q));
+        if (!userId || !serverName) { box.textContent = 'Select a user and server to load database access.'; return; }
+        box.innerHTML = (rows||[]).map(d => `
+          <div class=\"form-check form-switch\">
+            <input class=\"form-check-input\" type=\"checkbox\" id=\"db_${d.db_name}\" ${d.allowed ? 'checked' : ''} data-db=\"${d.db_name}\">
+            <label class=\"form-check-label\" for=\"db_${d.db_name}\">${d.db_name}</label>
+          </div>`).join('') || '<div class=\"text-muted\">No databases</div>';
+        box.querySelectorAll('input[data-db]').forEach(inp=>{
+          inp.onchange = async ()=>{
+            const db = inp.getAttribute('data-db');
+            const allowed = inp.checked;
+            const r2 = await fetch('/auth/database-access', { method:'POST', headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+ (localStorage.getItem('auth_token') || '') }, body: JSON.stringify({ user_id: userId, server_name: serverName, db_name: db, allowed }) });
+            const out2 = await r2.json();
+            if (r2.ok) showToast('Saved access', 'success'); else showToast(out2.error || 'Failed', 'danger');
+          };
+        });
+      }
+      async function loadDbAccess(userId, serverName){
+        if (!userId || !serverName) { __dbRows = []; renderDbAccessBox(userId, serverName); return; }
+        const r = await fetch('/auth/database-access?user_id='+encodeURIComponent(userId)+'&server_name='+encodeURIComponent(serverName), { headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || '') } });
+        __dbRows = await r.json();
+        if (!Array.isArray(__dbRows)) __dbRows = [];
+        renderDbAccessBox(userId, serverName);
+      }
+      document.getElementById('dbaccServer').addEventListener('change', async ()=>{
+        const userId = document.getElementById('uid').value || '';
+        const serverName = document.getElementById('dbaccServer').value || '';
+        await loadDbAccess(userId, serverName);
+      });
+      document.getElementById('dbaccSearch').addEventListener('input', ()=>{
+        const userId = document.getElementById('uid').value || '';
+        const serverName = document.getElementById('dbaccServer').value || '';
+        renderDbAccessBox(userId, serverName);
+      });
+      
+    </script>
+  </body>
+  </html>
