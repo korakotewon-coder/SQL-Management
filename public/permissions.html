@@ -253,6 +253,7 @@
         const sv = sel.value;
         sel.innerHTML = '<option value=\"\">เลือก Server...</option>' + __servers.map(s => `<option value=\"${s.server_name}\">${s.display}</option>`).join('');
         if (sv && __servers.find(x=>x.server_name===sv)) sel.value = sv;
+        sel.disabled = false;
       }
       function renderDbAccessBox(userId, serverName){
         const box = document.getElementById('dbAccessBox');
@@ -281,16 +282,25 @@
         if (!Array.isArray(__dbRows)) __dbRows = [];
         renderDbAccessBox(userId, serverName);
       }
-      document.getElementById('dbaccServer').addEventListener('change', async ()=>{
+      // debounce helper
+      function debounce(fn, ms = 200) {
+        let t; return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), ms); };
+      }
+      // server selection changes: clear search and load access
+      const onServerChange = async ()=>{
         const userId = document.getElementById('uid').value || '';
-        const serverName = document.getElementById('dbaccServer').value || '';
+        const sel = document.getElementById('dbaccServer');
+        const serverName = sel.value || '';
+        document.getElementById('dbaccSearch').value = '';
         await loadDbAccess(userId, serverName);
-      });
-      document.getElementById('dbaccSearch').addEventListener('input', ()=>{
+      };
+      document.getElementById('dbaccServer').addEventListener('change', onServerChange);
+      // search with debounce
+      document.getElementById('dbaccSearch').addEventListener('input', debounce(()=>{
         const userId = document.getElementById('uid').value || '';
         const serverName = document.getElementById('dbaccServer').value || '';
         renderDbAccessBox(userId, serverName);
-      });
+      }, 150));
       
     </script>
   </body>
