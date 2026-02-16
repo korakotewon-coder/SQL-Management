@@ -30,3 +30,4 @@ build/
 *.sql
 *.bak
 *.tmp
+k8s/
