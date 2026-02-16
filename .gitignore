@@ -30,3 +30,4 @@ build/
 *.sql
 *.bak
 *.tmp
+SQL-Management/
