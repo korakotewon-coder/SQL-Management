@@ -193,10 +193,10 @@
           await setCurrentUser(id);
           __createMode = false;
         }
-        loadUsers();
+      };
       function logout(){ localStorage.removeItem('auth_token'); location.href='/login.html'; }
       loadUsers();
-      
+
 
       // Server Access per User (by Connection)
       let __svRows = [];

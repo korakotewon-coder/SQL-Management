@@ -7,9 +7,30 @@ const AUTH_SECRET = process.env.AUTH_SECRET || 'change-me'
 const PERM_TABLE = 'dbo.UserPermissions'
 const SERVERS_TABLE = 'Tbl.Server'
 const SERVER_ACCESS_TABLE = 'Tbl.ServerAccess'
+const PASSWORD_KEY = crypto.createHash('sha256').update(process.env.PASSWORD_SECRET || (AUTH_SECRET + ':pwd')).digest()
 
 function sha256(text) {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex')
+}
+
+function encryptPassword(plain) {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', PASSWORD_KEY, iv)
+  const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return Buffer.concat([iv, tag, enc]).toString('base64')
+}
+
+function decryptPassword(b64) {
+  const buf = Buffer.from(String(b64), 'base64')
+  if (buf.length < 12 + 16 + 1) throw new Error('invalid')
+  const iv = buf.subarray(0, 12)
+  const tag = buf.subarray(12, 28)
+  const enc = buf.subarray(28)
+  const decipher = crypto.createDecipheriv('aes-256-gcm', PASSWORD_KEY, iv)
+  decipher.setAuthTag(tag)
+  const dec = Buffer.concat([decipher.update(enc), decipher.final()])
+  return dec.toString('utf8')
 }
 
 function sign(payload) {
@@ -47,6 +68,12 @@ async function ensureAuthDatabase() {
         password_hash NVARCHAR(128) NOT NULL,
         role NVARCHAR(20) NOT NULL
       )
+    END
+  `)
+  await pool.request().query(`
+    IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'${AUTH_TABLE}') AND name = 'password_hash' AND max_length < 800)
+    BEGIN
+      ALTER TABLE ${AUTH_TABLE} ALTER COLUMN password_hash NVARCHAR(400) NOT NULL
     END
   `)
   await pool.request().query(`
@@ -180,7 +207,7 @@ async function ensureAuthDatabase() {
   if (adminCheck.recordset.length === 0) {
     await pool.request()
       .input('user_id', 'admin')
-      .input('password_hash', sha256('1234'))
+      .input('password_hash', encryptPassword('1234'))
       .input('role', 'admin')
       .query(`INSERT INTO ${AUTH_TABLE} (user_id, password_hash, role) VALUES (@user_id, @password_hash, @role)`)
     await pool.request().query(`MERGE ${PERM_TABLE} AS t USING (SELECT 'admin' AS user_id) s ON t.user_id=s.user_id WHEN NOT MATCHED THEN INSERT (user_id, can_insert, can_update, can_delete, can_design, swagger) VALUES (s.user_id, 1, 1, 1, 1, 1);`)
@@ -229,10 +256,31 @@ function registerAuth(app) {
       const pool = await getPool(AUTH_DB)
       const r = await pool.request()
         .input('id', id)
-        .input('ph', sha256(password))
-        .query(`SELECT user_id, role FROM ${AUTH_TABLE} WHERE user_id = @id AND password_hash = @ph`)
+        .query(`SELECT user_id, role, password_hash FROM ${AUTH_TABLE} WHERE user_id = @id`)
       if (r.recordset.length === 0) return res.status(401).json({ error: 'Invalid credentials' })
-      const user = r.recordset[0]
+      const row = r.recordset[0]
+      let ok = false
+      let needsMigration = false
+      const stored = row.password_hash || ''
+      if (stored) {
+        try {
+          const plain = decryptPassword(stored)
+          if (plain === password) ok = true
+        } catch (e) {}
+      }
+      if (!ok) {
+        const legacy = sha256(password)
+        if (stored === legacy) {
+          ok = true
+          needsMigration = true
+        }
+      }
+      if (!ok) return res.status(401).json({ error: 'Invalid credentials' })
+      if (needsMigration) {
+        const enc = encryptPassword(password)
+        await pool.request().input('id', id).input('ph', enc).query(`UPDATE ${AUTH_TABLE} SET password_hash = @ph WHERE user_id = @id`)
+      }
+      const user = row
       const roleLower = String(user.role || '').toLowerCase()
       const token = sign({ id: user.user_id, role: roleLower, iat: Date.now() })
       const perms = await getPermissions(user.user_id, roleLower)
@@ -276,12 +324,12 @@ function registerAuth(app) {
       const exists = await pool.request().input('id', id).query(`SELECT 1 FROM ${AUTH_TABLE} WHERE user_id = @id`)
       if (exists.recordset.length) {
         await pool.request()
-          .input('id', id).input('ph', sha256(password)).input('role', role)
+          .input('id', id).input('ph', encryptPassword(password)).input('role', role)
           .query(`UPDATE ${AUTH_TABLE} SET password_hash = @ph, role = @role WHERE user_id = @id`)
         return res.json({ message: 'Updated user' })
       } else {
         await pool.request()
-          .input('id', id).input('ph', sha256(password)).input('role', role)
+          .input('id', id).input('ph', encryptPassword(password)).input('role', role)
           .query(`INSERT INTO ${AUTH_TABLE} (user_id, password_hash, role) VALUES (@id, @ph, @role)`)
         await pool.request().query(`MERGE ${PERM_TABLE} AS t USING (SELECT '${id}' AS user_id) s ON t.user_id=s.user_id WHEN NOT MATCHED THEN INSERT (user_id, can_insert, can_update, can_delete, can_design, swagger) VALUES (s.user_id, 0, 1, 0, 0, 0);`)
         return res.status(201).json({ message: 'Created user' })

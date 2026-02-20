@@ -124,13 +124,27 @@
             background-color: var(--ssms-blue);
             color: white;
         }
-        /* Responsive header: collapse toolbar into menu on small screens */
         .menu-dropdown { display: none; }
         .toolbar-btn { display: inline-flex; }
         @media (max-width: 576px) {
             .toolbar-btn { display: none; }
             .menu-dropdown { display: inline-flex; }
             .server-info { display: none; }
+            .btn-sm {
+                padding: 0.5rem 0.9rem;
+                font-size: 0.9rem;
+            }
+            .fab {
+                width: 60px;
+                height: 60px;
+                bottom: 16px;
+                right: 16px;
+                font-size: 26px;
+            }
+            #submitBtn,
+            #deleteBtn {
+                font-size: 0.95rem;
+            }
         }
         .sp-result-container {
             max-height: 400px;
@@ -144,7 +158,7 @@
     <div class="app-header d-flex justify-content-between align-items-center">
         <div>
             <div class="fw-bold"><i class="bi bi-database-fill-gear me-2"></i>Thanvasu DB Manager</div>
-            <span class="server-info">tvsdb1.thanvasupos.com:28914</span>
+            <span class="server-info">DB Manager V.1.0.1</span>
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-sm btn-secondary toolbar-btn" id="btnApiDocs" href="/api-docs" target="_blank" rel="noopener"><i class="bi bi-journal-code"></i> API Docs</a>
@@ -292,6 +306,7 @@
         let records = [];
         let columns = [];
         let primaryKey = null;
+        let currentWhereColumn = null;
         let currentType = 'TABLE';
         let isEditing = false;
         let originalRowData = null;
@@ -384,6 +399,7 @@
                 }
                 columns = colData;
                 primaryKey = (columns.find(c => c.IS_PRIMARY_KEY === 1)?.COLUMN_NAME) || columns[0].COLUMN_NAME;
+                currentWhereColumn = primaryKey;
                 const limitSel = document.getElementById('rowLimit');
                 const topVal = limitSel ? limitSel.value : '100';
                 const dataParams = new URLSearchParams({ top: topVal });
@@ -442,7 +458,7 @@
                                         return `<td class="text-truncate" style="max-width: 150px;">${val !== null ? val : '<span class="text-muted">NULL</span>'}</td>`;
                                     }).join('')}
                                     ${window.__canDelete ? `<td class="text-center">
-                                        <button class="btn btn-sm btn-outline-danger" onclick='event.stopPropagation(); deleteRecord(${JSON.stringify((records[idx] || {})[primaryKey])})'><i class="bi bi-trash"></i></button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick='event.stopPropagation(); deleteRecord(${JSON.stringify(records[idx] || {}).replace(/'/g, "&apos;")})'><i class="bi bi-trash"></i></button>
                                     </td>` : ''}
                                 </tr>
                             `).join('')}
@@ -674,6 +690,31 @@
             }
 
             fieldsContainer.innerHTML = '';
+            let whereSelectEl = null;
+            if (isEditing) {
+                const whereDiv = document.createElement('div');
+                whereDiv.className = 'mb-3';
+                const options = columns.map(col => {
+                    const name = col.COLUMN_NAME;
+                    const selected = name === (currentWhereColumn || primaryKey) ? 'selected' : '';
+                    return `<option value="${name}" ${selected}>${name}</option>`;
+                }).join('');
+                whereDiv.innerHTML = `
+                    <label class="form-label fw-bold small mb-1">WHERE column</label>
+                    <select id="whereColumn" class="form-select form-select-sm">
+                        ${options}
+                    </select>
+                `;
+                fieldsContainer.appendChild(whereDiv);
+                whereSelectEl = whereDiv.querySelector('#whereColumn');
+                if (whereSelectEl) {
+                    currentWhereColumn = whereSelectEl.value || primaryKey;
+                    whereSelectEl.addEventListener('change', () => {
+                        currentWhereColumn = whereSelectEl.value || primaryKey;
+                        updateSqlPreview(Boolean(data));
+                    });
+                }
+            }
             columns.forEach(col => {
                 const name = col.COLUMN_NAME;
                 const type = col.DATA_TYPE;
@@ -735,11 +776,13 @@
                     if (!isIdentity || isEdit) list.push({ name, value, type, isIdentity });
                 });
                 if (isEdit) {
+                    const whereCol = (document.getElementById('whereColumn')?.value) || currentWhereColumn || primaryKey;
                     const sets = list.map(x => `[${x.name}] = ${fmt(x.value, x.type)}`).join(', ');
-                    const idVal = (originalRowData && originalRowData[primaryKey] !== undefined)
-                      ? originalRowData[primaryKey]
-                      : (document.getElementById(`field_${primaryKey}`)?.value ?? '');
-                    sqlPre.textContent = `UPDATE [${tableFull.split('.').join('].[')}] SET ${sets} WHERE [${primaryKey}] = ${fmt(idVal, columns.find(c=>c.COLUMN_NAME===primaryKey)?.DATA_TYPE)};`;
+                    const idVal = (originalRowData && originalRowData[whereCol] !== undefined)
+                      ? originalRowData[whereCol]
+                      : (document.getElementById(`field_${whereCol}`)?.value ?? '');
+                    const whereType = columns.find(c => c.COLUMN_NAME === whereCol)?.DATA_TYPE;
+                    sqlPre.textContent = `UPDATE [${tableFull.split('.').join('].[')}] SET ${sets} WHERE [${whereCol}] ${fmt(idVal, whereType) === 'NULL' ? 'IS NULL' : '= ' + fmt(idVal, whereType)};`;
                 } else {
                     const cols = list.filter(x => !x.isIdentity).map(x => `[${x.name}]`).join(', ');
                     const vals = list.filter(x => !x.isIdentity).map(x => fmt(x.value, x.type)).join(', ');
@@ -798,14 +841,17 @@
                     payload[name] = coerce(raw, type, originalVal);
                 });
 
-                const idValue = (originalRowData && originalRowData[primaryKey] !== undefined)
-                  ? originalRowData[primaryKey]
-                  : document.getElementById(`field_${primaryKey}`).value;
+                const whereCol = isEdit ? ((document.getElementById('whereColumn')?.value) || currentWhereColumn || primaryKey) : primaryKey;
+                const idValue = (originalRowData && originalRowData[whereCol] !== undefined)
+                  ? originalRowData[whereCol]
+                  : document.getElementById(`field_${whereCol}`)?.value;
+                const idIsNull = idValue === null || idValue === undefined || String(idValue).trim().toUpperCase() === 'NULL';
                 const sv = serverSelector.value || '';
                 const qp = new URLSearchParams();
                 if (sv) qp.append('sv', sv);
+                if (isEdit && idIsNull) qp.append('idIsNull', '1');
                 const url = isEdit 
-                  ? `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}/${encodeURIComponent(primaryKey)}/${encodeURIComponent(idValue)}?${qp.toString()}`
+                  ? `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}/${encodeURIComponent(whereCol)}/${encodeURIComponent(idIsNull ? 'NULL' : String(idValue))}?${qp.toString()}`
                   : `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}?${qp.toString()}`;
                 const method = isEdit ? 'PUT' : 'POST';
 
@@ -871,13 +917,18 @@
             const db = dbSelector.value;
             const table = objectSelector.value;
             const sv = serverSelector.value || '';
-            const sqlText = `DELETE FROM [${table.split('.').join('].[')}] WHERE [${primaryKey}] = '${String(idValue).replace(/'/g,"''")}';`;
+            const whereCol = currentWhereColumn || primaryKey;
+            const val = idValue && typeof idValue === 'object' ? idValue[whereCol] : idValue;
+            const isNull = val === null || val === undefined;
+            const previewVal = isNull ? 'IS NULL' : `= '${String(val).replace(/'/g,"''")}'`;
+            const sqlText = `DELETE FROM [${table.split('.').join('].[')}] WHERE [${whereCol}] ${previewVal};`;
             const ok = await confirmDelete(sqlText);
             if (!ok) return;
             {
                 const params = new URLSearchParams();
                 if (sv) params.append('sv', sv);
-                const url = `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}/${encodeURIComponent(primaryKey)}/${encodeURIComponent(idValue)}?${params.toString()}`;
+                if (isNull) params.append('idIsNull', '1');
+                const url = `/api/${encodeURIComponent(db)}/${encodeURIComponent(table)}/${encodeURIComponent(whereCol)}/${encodeURIComponent(isNull ? 'NULL' : String(val))}?${params.toString()}`;
                 const res = await fetch(url, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || ''), 'X-Delete-Code': '28914' } });
                 if (res.ok) {
                     formModal.hide();

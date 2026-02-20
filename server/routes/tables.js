@@ -216,6 +216,7 @@ module.exports = function registerTables(app) {
     const { db, table, idCol, idValue } = req.params
     const data = req.body
     const sv = req.query.sv
+    const idIsNull = String(req.query.idIsNull || '0').toLowerCase() === '1'
     try {
       if (!await requireCanUpdate(req, res)) return
       if (!(await requireServerAllowed(req, res, sv))) return
@@ -232,10 +233,16 @@ module.exports = function registerTables(app) {
       const sets = Object.keys(data).map(col => `[${col}]=@${col}`).join(', ')
       const request = pool.request()
       Object.entries(data).forEach(([k, v]) => request.input(k, v))
-      request.input('idValue', idValue)
-      await request.query(`UPDATE TOP (1) [${table.split('.').join('].[')}] SET ${sets} WHERE [${idCol}] = @idValue`)
+      let whereClause
+      if (idIsNull) {
+        whereClause = `[${idCol}] IS NULL`
+      } else {
+        request.input('idValue', idValue)
+        whereClause = `[${idCol}] = @idValue`
+      }
+      await request.query(`UPDATE TOP (1) [${table.split('.').join('].[')}] SET ${sets} WHERE ${whereClause}`)
       const payload = getPayload(req) || { id: '', role: '' }
-      await writeAudit({ user_id: payload.id, role: payload.role, action: 'update', db, object: table, id_col: idCol, id_value: idValue, payload: data })
+      await writeAudit({ user_id: payload.id, role: payload.role, action: 'update', db, object: table, id_col: idCol, id_value: idIsNull ? null : idValue, payload: data })
       res.json({ message: 'Updated' })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -245,6 +252,7 @@ module.exports = function registerTables(app) {
   app.delete('/api/:db/:table/:idCol/:idValue', async (req, res) => {
     const { db, table, idCol, idValue } = req.params
     const sv = req.query.sv
+    const idIsNull = String(req.query.idIsNull || '0').toLowerCase() === '1'
     try {
       if (!await requireCanDelete(req, res)) return
       if (!(await requireServerAllowed(req, res, sv))) return
@@ -261,9 +269,13 @@ module.exports = function registerTables(app) {
       const gotCode = String(req.headers['x-delete-code'] || '')
       if (gotCode !== needCode) return res.status(403).json({ error: 'Delete requires confirmation code' })
       const pool = sv ? await getPoolByName(sv, db) : await getPool(db)
-      await pool.request().input('idValue', idValue).query(`DELETE TOP (1) FROM [${table.split('.').join('].[')}] WHERE [${idCol}] = @idValue`)
+      if (idIsNull) {
+        await pool.request().query(`DELETE TOP (1) FROM [${table.split('.').join('].[')}] WHERE [${idCol}] IS NULL`)
+      } else {
+        await pool.request().input('idValue', idValue).query(`DELETE TOP (1) FROM [${table.split('.').join('].[')}] WHERE [${idCol}] = @idValue`)
+      }
       const payload = getPayload(req) || { id: '', role: '' }
-      await writeAudit({ user_id: payload.id, role: payload.role, action: 'delete', db, object: table, id_col: idCol, id_value: idValue })
+      await writeAudit({ user_id: payload.id, role: payload.role, action: 'delete', db, object: table, id_col: idCol, id_value: idIsNull ? null : idValue })
       res.json({ message: 'Deleted' })
     } catch (err) {
       res.status(500).json({ error: err.message })
