@@ -18,11 +18,11 @@ function encryptPassword(plain) {
   const cipher = crypto.createCipheriv('aes-256-gcm', PASSWORD_KEY, iv)
   const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
-  return Buffer.concat([iv, tag, enc]).toString('base64')
+  return Buffer.concat([iv, tag, enc]).toString('hex')
 }
 
-function decryptPassword(b64) {
-  const buf = Buffer.from(String(b64), 'base64')
+function decryptPassword(text) {
+  const buf = Buffer.from(String(text), 'hex')
   if (buf.length < 12 + 16 + 1) throw new Error('invalid')
   const iv = buf.subarray(0, 12)
   const tag = buf.subarray(12, 28)
